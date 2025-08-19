@@ -1,3 +1,10 @@
+## [0.1.7](https://github.com/cloud-copilot/log/compare/v0.1.6...v0.1.7) (2025-08-19)
+
+
+### Features
+
+* Improve logging of errors ([c4ca2d6](https://github.com/cloud-copilot/log/commit/c4ca2d6df3a12957516515a89b1b54de86ed336a))
+
 ## [0.1.6](https://github.com/cloud-copilot/log/compare/v0.1.5...v0.1.6) (2025-08-16)
 
 ## [0.1.5](https://github.com/cloud-copilot/log/compare/v0.1.4...v0.1.5) (2025-08-09)
