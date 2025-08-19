@@ -148,10 +148,9 @@ describe('StandardLogger', () => {
       const parsed = JSON.parse(call)
 
       expect(parsed.message).toBe('something failed')
-      expect(parsed.errors).toHaveLength(1)
-      expect(parsed.errors[0].name).toBe('Error')
-      expect(parsed.errors[0].message).toBe('test error')
-      expect(parsed.errors[0].stack).toBeDefined()
+      expect(parsed.error.name).toBe('Error')
+      expect(parsed.error.message).toBe('test error')
+      expect(parsed.error.stack).toBeDefined()
     })
 
     it('should handle multiple Error objects', () => {
@@ -177,8 +176,25 @@ describe('StandardLogger', () => {
       expect(parsed.message).toBe('mixed args string 456')
       expect(parsed.userId).toBe(123)
       expect(parsed.action).toBe('test')
-      expect(parsed.errors).toHaveLength(1)
-      expect(parsed.errors[0].message).toBe('test error')
+      expect(parsed.error.message).toBe('test error')
+    })
+
+    it('should report multiple errors', () => {
+      const error1 = new Error('error1')
+      const error2 = new Error('error2')
+      logger.warn('mixed args', { userId: 123 }, 'string', 456, error1, error2, { action: 'test' })
+
+      const call = consoleSpy.warn.mock.calls[0][0] as any
+      const parsed = JSON.parse(call)
+
+      expect(parsed.message).toBe('mixed args string 456')
+      expect(parsed.userId).toBe(123)
+      expect(parsed.action).toBe('test')
+      expect(parsed.error.message).toEqual('error1')
+      expect(parsed.error_count).toBe(2)
+      expect(parsed.errors).toHaveLength(2)
+      expect(parsed.errors[0].message).toBe('error1')
+      expect(parsed.errors[1].message).toBe('error2')
     })
 
     it('should handle null and undefined values', () => {
