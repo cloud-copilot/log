@@ -1,3 +1,10 @@
+## [0.1.30](https://github.com/cloud-copilot/log/compare/v0.1.29...v0.1.30) (2026-02-15)
+
+
+### Bug Fixes
+
+* Ignore guarddog rule causing false positives ([006d1cf](https://github.com/cloud-copilot/log/commit/006d1cf28bd87002c328a0b80af4d1213de8652b))
+
 ## [0.1.29](https://github.com/cloud-copilot/log/compare/v0.1.28...v0.1.29) (2026-02-14)
 
 ## [0.1.28](https://github.com/cloud-copilot/log/compare/v0.1.27...v0.1.28) (2026-01-19)
