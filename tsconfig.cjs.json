@@ -5,7 +5,9 @@
   "exclude": ["**/*.test.ts"],
 
   "compilerOptions": {
+    "module": "commonjs",
     "rootDir": "src",
     "outDir": "dist/cjs",
+    "verbatimModuleSyntax": false
   }
 }
