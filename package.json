@@ -1,6 +1,6 @@
 {
   "name": "@cloud-copilot/log",
-  "version": "0.1.35",
+  "version": "0.1.36",
   "description": "A lightweight JSON logger",
   "keywords": [
     "typescript",
