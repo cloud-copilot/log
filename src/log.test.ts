@@ -1,5 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { isLogLevel, StandardLogger, type LogLevel } from './log'
+import {
+  isLogLevel,
+  log,
+  StandardLogger,
+  type Logger,
+  type LogLevel,
+  normalizeArgs,
+  setLogger,
+  getLogger
+} from './log.js'
 
 describe('StandardLogger', () => {
   let consoleSpy: {
@@ -48,6 +57,107 @@ describe('StandardLogger', () => {
 
       logger.warn('test message')
       expect(consoleSpy.warn).toHaveBeenCalled()
+    })
+
+    it('should accept options object with logLevel', () => {
+      const logger = new StandardLogger({ logLevel: 'debug' })
+
+      logger.debug('test message')
+      expect(consoleSpy.log).toHaveBeenCalled()
+    })
+
+    it('should accept options object with rawJsonLogs', () => {
+      const logger = new StandardLogger({ logLevel: 'info', rawJsonLogs: true })
+
+      logger.info('test message')
+
+      //Then the output should be a raw object, not a string
+      const call = consoleSpy.info.mock.calls[0][0]
+      expect(typeof call).toBe('object')
+      expect(call.message).toBe('test message')
+    })
+
+    it('should default rawJsonLogs to false when env var is not set', () => {
+      const logger = new StandardLogger({ logLevel: 'info' })
+
+      logger.info('test message')
+
+      //Then the output should be a JSON string
+      const call = consoleSpy.info.mock.calls[0][0]
+      expect(typeof call).toBe('string')
+      JSON.parse(call) // should not throw
+    })
+  })
+
+  describe('IAM_COLLECT_RAW_JSON_LOGS env var', () => {
+    const originalEnv = process.env.IAM_COLLECT_RAW_JSON_LOGS
+
+    afterEach(() => {
+      if (originalEnv === undefined) {
+        delete process.env.IAM_COLLECT_RAW_JSON_LOGS
+      } else {
+        process.env.IAM_COLLECT_RAW_JSON_LOGS = originalEnv
+      }
+    })
+
+    it('should enable rawJsonLogs when env var is true', () => {
+      //Given the env var is set to true
+      process.env.IAM_COLLECT_RAW_JSON_LOGS = 'true'
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+      const logger = new StandardLogger({ logLevel: 'info' })
+
+      //When logging a message
+      logger.info('env-driven raw output')
+
+      //Then the output should be a raw object
+      const call = consoleSpy.mock.calls[0][0]
+      expect(typeof call).toBe('object')
+      expect(call.message).toBe('env-driven raw output')
+    })
+
+    it('should enable rawJsonLogs for bare constructor when env var is true', () => {
+      //Given the env var is set to true
+      process.env.IAM_COLLECT_RAW_JSON_LOGS = 'true'
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const logger = new StandardLogger()
+
+      //When logging a message
+      logger.warn('bare constructor raw output')
+
+      //Then the output should be a raw object
+      const call = consoleSpy.mock.calls[0][0]
+      expect(typeof call).toBe('object')
+      expect(call.message).toBe('bare constructor raw output')
+    })
+
+    it('should allow explicit rawJsonLogs: false to override the env var', () => {
+      //Given the env var is set to true but rawJsonLogs is explicitly false
+      process.env.IAM_COLLECT_RAW_JSON_LOGS = 'true'
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+      const logger = new StandardLogger({ logLevel: 'info', rawJsonLogs: false })
+
+      //When logging a message
+      logger.info('override to string')
+
+      //Then the output should be a JSON string despite the env var
+      const call = consoleSpy.mock.calls[0][0]
+      expect(typeof call).toBe('string')
+      const parsed = JSON.parse(call)
+      expect(parsed.message).toBe('override to string')
+    })
+
+    it('should default to stringified output when env var is not set', () => {
+      //Given the env var is not set
+      delete process.env.IAM_COLLECT_RAW_JSON_LOGS
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+      const logger = new StandardLogger({ logLevel: 'info' })
+
+      //When logging a message
+      logger.info('no env var')
+
+      //Then the output should be a JSON string
+      const call = consoleSpy.mock.calls[0][0]
+      expect(typeof call).toBe('string')
     })
   })
 
@@ -217,6 +327,39 @@ describe('StandardLogger', () => {
     })
   })
 
+  describe('rawJsonLogs', () => {
+    it('should output raw objects when rawJsonLogs is true', () => {
+      //Given a logger with rawJsonLogs enabled
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+      const logger = new StandardLogger({ logLevel: 'info', rawJsonLogs: true })
+
+      //When logging a message
+      logger.info('raw output', { key: 'value' })
+
+      //Then the output should be a raw object
+      const call = consoleSpy.mock.calls[0][0]
+      expect(typeof call).toBe('object')
+      expect(call.message).toBe('raw output')
+      expect(call.key).toBe('value')
+      expect(call.level).toBe('info')
+    })
+
+    it('should output JSON strings when rawJsonLogs is false', () => {
+      //Given a logger with rawJsonLogs disabled
+      const consoleSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+      const logger = new StandardLogger({ logLevel: 'info', rawJsonLogs: false })
+
+      //When logging a message
+      logger.info('stringified output')
+
+      //Then the output should be a JSON string
+      const call = consoleSpy.mock.calls[0][0]
+      expect(typeof call).toBe('string')
+      const parsed = JSON.parse(call)
+      expect(parsed.message).toBe('stringified output')
+    })
+  })
+
   describe('console method mapping', () => {
     let logger: StandardLogger
 
@@ -279,5 +422,152 @@ describe('isLogLevel', () => {
   it('should work with LogLevel type', () => {
     const level: LogLevel = 'info'
     expect(isLogLevel(level)).toBe(true)
+  })
+})
+
+describe('normalizeArgs', () => {
+  it('should separate string message from object context', () => {
+    //Given a mix of string and object arguments
+    const args = ['hello world', { userId: 123 }]
+
+    //When normalizing the arguments
+    const result = normalizeArgs(args)
+
+    //Then the message and context should be separated
+    expect(result.message).toBe('hello world')
+    expect(result.context).toEqual({ userId: 123 })
+    expect(result.errors).toEqual([])
+  })
+
+  it('should handle object-first arguments', () => {
+    //Given an object followed by a string
+    const args = [{ accountId: '123' }, 'Using cached credentials']
+
+    //When normalizing the arguments
+    const result = normalizeArgs(args)
+
+    //Then both parts should be captured
+    expect(result.message).toBe('Using cached credentials')
+    expect(result.context).toEqual({ accountId: '123' })
+  })
+
+  it('should extract errors', () => {
+    //Given a message, error, and context
+    const error = new Error('test error')
+    const args = ['Failed to parse', error, { topicArn: 'arn:aws:sns:...' }]
+
+    //When normalizing the arguments
+    const result = normalizeArgs(args)
+
+    //Then errors should be extracted
+    expect(result.message).toBe('Failed to parse')
+    expect(result.context).toEqual({ topicArn: 'arn:aws:sns:...' })
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].message).toBe('test error')
+  })
+
+  it('should merge multiple object arguments', () => {
+    //Given multiple object arguments
+    const args = ['message', { a: 1 }, { b: 2 }]
+
+    //When normalizing the arguments
+    const result = normalizeArgs(args)
+
+    //Then objects should be merged
+    expect(result.context).toEqual({ a: 1, b: 2 })
+  })
+
+  it('should handle empty arguments', () => {
+    //Given no arguments
+    const result = normalizeArgs([])
+
+    //Then everything should be empty
+    expect(result.message).toBe('')
+    expect(result.context).toEqual({})
+    expect(result.errors).toEqual([])
+  })
+})
+
+describe('module-level logger', () => {
+  let consoleSpy: ReturnType<typeof vi.spyOn>
+
+  beforeEach(() => {
+    consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // Reset to default logger
+    setLogger(new StandardLogger())
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    setLogger(new StandardLogger())
+  })
+
+  it('should use the default StandardLogger', () => {
+    //Given the default logger
+    const logger = getLogger()
+
+    //Then it should be a StandardLogger
+    expect(logger).toBeInstanceOf(StandardLogger)
+  })
+
+  it('should allow replacing the logger with setLogger', () => {
+    //Given a custom logger
+    const customLogger: Logger = {
+      trace: vi.fn(),
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn()
+    }
+
+    //When we set it as the module logger
+    setLogger(customLogger)
+
+    //Then getLogger should return the custom logger
+    expect(getLogger()).toBe(customLogger)
+  })
+
+  it('should route log object calls through the current logger', () => {
+    //Given a spy logger
+    const spyLogger: Logger = {
+      trace: vi.fn(),
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn()
+    }
+    setLogger(spyLogger)
+
+    //When calling via the log object
+    log.trace('trace msg')
+    log.debug('debug msg')
+    log.info('info msg')
+    log.warn('warn msg')
+    log.error('error msg')
+
+    //Then each should delegate to the corresponding logger method
+    expect(spyLogger.trace).toHaveBeenCalledWith('trace msg')
+    expect(spyLogger.debug).toHaveBeenCalledWith('debug msg')
+    expect(spyLogger.info).toHaveBeenCalledWith('info msg')
+    expect(spyLogger.warn).toHaveBeenCalledWith('warn msg')
+    expect(spyLogger.error).toHaveBeenCalledWith('error msg')
+  })
+
+  it('should pass multiple arguments through the log object', () => {
+    //Given a spy logger
+    const spyLogger: Logger = {
+      trace: vi.fn(),
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn()
+    }
+    setLogger(spyLogger)
+
+    //When calling with multiple arguments
+    log.warn('message', { key: 'value' }, new Error('oops'))
+
+    //Then all arguments should be forwarded
+    expect(spyLogger.warn).toHaveBeenCalledWith('message', { key: 'value' }, expect.any(Error))
   })
 })
