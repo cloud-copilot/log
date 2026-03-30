@@ -1,3 +1,10 @@
+## [0.1.39](https://github.com/cloud-copilot/log/compare/v0.1.38...v0.1.39) (2026-03-30)
+
+
+### Features
+
+* Add JSON logging and enable plugging in an alternate log delivery implementation ([ed0578c](https://github.com/cloud-copilot/log/commit/ed0578cb23e0670acaf164d01e9beadbed953d19))
+
 ## [0.1.38](https://github.com/cloud-copilot/log/compare/v0.1.37...v0.1.38) (2026-03-28)
 
 ## [0.1.37](https://github.com/cloud-copilot/log/compare/v0.1.36...v0.1.37) (2026-03-22)
